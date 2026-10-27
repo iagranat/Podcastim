@@ -1,0 +1,75 @@
+export const KidsTheme = {
+  colors: {
+    background: '#FAF7F2',
+    card: '#FFFFFF',
+    text: '#2D3436',
+    textSecondary: '#636E72',
+    textMuted: '#B2BEC3',
+    primary: '#6C5CE7', // Cheerful Royal Purple
+    primaryLight: '#E8E5FD',
+    secondary: '#FF7675', // Playful Coral
+    secondaryLight: '#FFE3E2',
+    accent: '#FDCB6E', // Sunny Warm Yellow
+    accentLight: '#FFF6E0',
+    mint: '#00B894',
+    mintLight: '#D5F8EE',
+    cyan: '#00CEC9',
+    cyanLight: '#DCFBF9',
+    border: '#EFEAE2',
+    playerBg: '#2D3436',
+    white: '#FFFFFF',
+    star: '#FFA502',
+  },
+  roundness: {
+    sm: 12,
+    md: 18,
+    lg: 24,
+    xl: 32,
+    full: 9999,
+  },
+  typography: {
+    fontFamily: 'System',
+    titleSize: 22,
+    headerSize: 18,
+    bodySize: 15,
+    smallSize: 13,
+  },
+};
+
+export const FullTheme = {
+  colors: {
+    background: '#121418',
+    card: '#1D2128',
+    text: '#F5F6FA',
+    textSecondary: '#A4B0BE',
+    textMuted: '#747D8C',
+    primary: '#4834D4',
+    primaryLight: '#262254',
+    secondary: '#EB4D4B',
+    secondaryLight: '#461E20',
+    accent: '#F0932B',
+    accentLight: '#442C16',
+    mint: '#6AB04C',
+    mintLight: '#213A1B',
+    cyan: '#22A6B3',
+    cyanLight: '#18363B',
+    border: '#2C3038',
+    playerBg: '#181B20',
+    white: '#FFFFFF',
+    star: '#F1C40F',
+  },
+  roundness: {
+    sm: 8,
+    md: 14,
+    lg: 20,
+    xl: 26,
+    full: 9999,
+  },
+  typography: {
+    fontFamily: 'System',
+    titleSize: 20,
+    headerSize: 17,
+    bodySize: 14,
+    smallSize: 12,
+  },
+};
