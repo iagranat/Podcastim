@@ -12,6 +12,10 @@ interface AppContextType {
   toggleFavorite: (podcast: Podcast) => Promise<void>;
   history: Episode[];
   addToHistory: (episode: Episode) => Promise<void>;
+  listenedEpisodeIds: string[];
+  isEpisodeListened: (episodeId: string) => boolean;
+  markEpisodeListened: (episodeId: string) => Promise<void>;
+  toggleEpisodeListened: (episodeId: string) => Promise<void>;
   parentLockEnabled: boolean;
   setParentLockEnabled: (enabled: boolean) => Promise<void>;
 }
@@ -22,6 +26,7 @@ const STORAGE_KEYS = {
   MODE: '@podcastim_app_mode',
   FAVORITES: '@podcastim_favorites',
   HISTORY: '@podcastim_history',
+  LISTENED_EPISODES: '@podcastim_listened_episodes_v1',
   PARENT_LOCK: '@podcastim_parent_lock',
 };
 
@@ -29,6 +34,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [mode, setModeState] = useState<AppMode>('kids');
   const [favorites, setFavorites] = useState<Podcast[]>([]);
   const [history, setHistory] = useState<Episode[]>([]);
+  const [listenedEpisodeIds, setListenedEpisodeIds] = useState<string[]>([]);
   const [parentLockEnabled, setParentLockState] = useState<boolean>(true);
 
   useEffect(() => {
@@ -48,6 +54,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const savedHist = await AsyncStorage.getItem(STORAGE_KEYS.HISTORY);
       if (savedHist) {
         setHistory(JSON.parse(savedHist));
+      }
+      const savedListened = await AsyncStorage.getItem(STORAGE_KEYS.LISTENED_EPISODES);
+      if (savedListened) {
+        setListenedEpisodeIds(JSON.parse(savedListened));
       }
       const savedLock = await AsyncStorage.getItem(STORAGE_KEYS.PARENT_LOCK);
       if (savedLock !== null) {
@@ -97,6 +107,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const isEpisodeListened = (episodeId: string) => {
+    return listenedEpisodeIds.includes(episodeId);
+  };
+
+  const markEpisodeListened = async (episodeId: string) => {
+    if (listenedEpisodeIds.includes(episodeId)) return;
+    const updated = [...listenedEpisodeIds, episodeId];
+    setListenedEpisodeIds(updated);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.LISTENED_EPISODES, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to save listened episode', e);
+    }
+  };
+
+  const toggleEpisodeListened = async (episodeId: string) => {
+    let updated: string[];
+    if (listenedEpisodeIds.includes(episodeId)) {
+      updated = listenedEpisodeIds.filter((id) => id !== episodeId);
+    } else {
+      updated = [...listenedEpisodeIds, episodeId];
+    }
+    setListenedEpisodeIds(updated);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.LISTENED_EPISODES, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to toggle listened episode', e);
+    }
+  };
+
   const setParentLockEnabled = async (enabled: boolean) => {
     setParentLockState(enabled);
     try {
@@ -119,6 +159,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleFavorite,
         history,
         addToHistory,
+        listenedEpisodeIds,
+        isEpisodeListened,
+        markEpisodeListened,
+        toggleEpisodeListened,
         parentLockEnabled,
         setParentLockEnabled,
       }}

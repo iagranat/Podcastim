@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { createAudioPlayer, setAudioModeAsync, AudioPlayer, AudioStatus } from 'expo-audio';
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  requestNotificationPermissionsAsync,
+  AudioPlayer,
+  AudioStatus,
+} from 'expo-audio';
 import { Episode } from '../api/types';
 import { useApp } from './AppContext';
 
@@ -33,7 +39,7 @@ interface AudioPlayerContextType {
 const AudioPlayerContext = createContext<AudioPlayerContextType | undefined>(undefined);
 
 export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { addToHistory } = useApp();
+  const { addToHistory, markEpisodeListened } = useApp();
 
   const playerRef = useRef<AudioPlayer | null>(null);
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null);
@@ -51,15 +57,17 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [sleepTimerRemaining, setSleepTimerRemaining] = useState<number | null>(null);
   const sleepTimerRef = useRef<any>(null);
 
-  // Initialize audio mode for background playback
+  // Initialize audio mode for background playback & lockscreen controls
   useEffect(() => {
     async function initAudio() {
       try {
         await setAudioModeAsync({
           playsInSilentMode: true,
           shouldPlayInBackground: true,
-          interruptionMode: 'duckOthers',
+          interruptionMode: 'doNotMix',
         });
+        // Request notification permission for lock screen and notification shade controls
+        await requestNotificationPermissionsAsync().catch(() => {});
       } catch (e) {
         console.warn('Error setting audio mode', e);
       }
@@ -68,6 +76,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     return () => {
       if (playerRef.current) {
+        try {
+          playerRef.current.clearLockScreenControls();
+        } catch (_) {}
         playerRef.current.remove();
         playerRef.current = null;
       }
@@ -129,6 +140,13 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setIsPlaying(false);
     }
 
+    // Auto mark as listened when reached >80% or finished
+    if (currentEpisode && status.duration && status.currentTime) {
+      if (status.currentTime / status.duration > 0.8 || status.didJustFinish) {
+        markEpisodeListened(currentEpisode.id);
+      }
+    }
+
     if (status.didJustFinish) {
       if (sleepTimerOption === 0) {
         cancelSleepTimer();
@@ -152,6 +170,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
       // Cleanup previous player instance
       if (playerRef.current) {
+        try {
+          playerRef.current.clearLockScreenControls();
+        } catch (_) {}
         playerRef.current.remove();
         playerRef.current = null;
       }
@@ -160,12 +181,34 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setPositionMs(0);
       setDurationMs(0);
 
-      // Record to history
+      // Record to history & request notification permission
       addToHistory(episode);
+      requestNotificationPermissionsAsync().catch(() => {});
 
       const newPlayer = createAudioPlayer(episode.src, {
         updateInterval: 500,
       });
+
+      // Enable system lockscreen and notification center media controls
+      try {
+        newPlayer.setActiveForLockScreen(
+          true,
+          {
+            title: episode.title,
+            artist: episode.author || episode.podcastTitle,
+            albumTitle: episode.podcastTitle,
+            artworkUrl: episode.podcastImage,
+          },
+          {
+            showSeekForward: true,
+            showSeekBackward: true,
+            showNextTrack: true,
+            showPreviousTrack: true,
+          }
+        );
+      } catch (lockErr) {
+        console.warn('Failed to configure lockscreen controls', lockErr);
+      }
 
       newPlayer.addListener('playbackStatusUpdate', onPlaybackStatusUpdate);
       newPlayer.setPlaybackRate(playbackRate);

@@ -13,10 +13,11 @@ interface EpisodeItemProps {
 
 export const EpisodeItem: React.FC<EpisodeItemProps> = ({ episode, playlist, index }) => {
   const { currentEpisode, isPlaying, isLoading, playEpisode, togglePlayPause } = useAudioPlayer();
-  const { theme, mode } = useApp();
+  const { theme, mode, isEpisodeListened, toggleEpisodeListened } = useApp();
   const [expanded, setExpanded] = useState(false);
 
   const isCurrent = currentEpisode?.id === episode.id;
+  const isListened = isEpisodeListened(episode.id);
   const isKids = mode === 'kids';
 
   const handlePress = () => {
@@ -111,6 +112,18 @@ export const EpisodeItem: React.FC<EpisodeItemProps> = ({ episode, playlist, ind
               </View>
             )}
 
+            {isListened && (
+              <View
+                style={[
+                  styles.listenedBadge,
+                  { backgroundColor: isKids ? '#D1FAE5' : 'rgba(16, 185, 129, 0.15)' },
+                ]}
+              >
+                <Ionicons name="checkmark-circle" size={13} color="#059669" />
+                <Text style={styles.listenedBadgeText}>הושמע</Text>
+              </View>
+            )}
+
             {isCurrent && (
               <View
                 style={[
@@ -125,6 +138,19 @@ export const EpisodeItem: React.FC<EpisodeItemProps> = ({ episode, playlist, ind
             )}
           </View>
         </View>
+
+        {/* Toggle Listened Button */}
+        <TouchableOpacity
+          onPress={() => toggleEpisodeListened(episode.id)}
+          style={styles.actionBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons
+            name={isListened ? 'checkmark-circle' : 'checkmark-circle-outline'}
+            size={22}
+            color={isListened ? '#10B981' : theme.colors.textMuted}
+          />
+        </TouchableOpacity>
 
         {/* Description Expander Toggle */}
         {episode.description ? (
@@ -206,6 +232,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  listenedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  listenedBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  actionBtn: {
+    padding: 6,
+    marginLeft: 4,
   },
   expandBtn: {
     padding: 6,

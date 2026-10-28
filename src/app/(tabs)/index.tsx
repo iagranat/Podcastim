@@ -15,7 +15,7 @@ import { useApp } from '../../context/AppContext';
 import { PodcastCard } from '../../components/PodcastCard';
 import { KidsHeroBanner } from '../../components/KidsHeroBanner';
 import { ModeSwitchPill } from '../../components/ModeSwitchPill';
-import { fetchPodcasts, fetchCategories, KIDS_CATEGORY_ID } from '../../api/podcastim';
+import { fetchPodcasts, fetchCategories, getOrLoadCatalogIndex, KIDS_CATEGORY_ID } from '../../api/podcastim';
 import { Podcast, Category } from '../../api/types';
 import { KidsTopic } from '../../constants/kidsTopics';
 
@@ -62,6 +62,8 @@ export default function HomeScreen() {
   useEffect(() => {
     setLoading(true);
     loadData();
+    // Pre-cache full catalog index in the background for instant search & offline browsing
+    getOrLoadCatalogIndex().catch(() => {});
   }, [loadData]);
 
   const onRefresh = () => {

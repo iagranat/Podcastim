@@ -5,10 +5,11 @@ const BASE_URL = 'https://podcastim.org.il/wp-json/wp/v2';
 export const KIDS_CATEGORY_ID = 8; // Official 'ילדים' category on podcastim.org.il
 
 const CACHE_KEYS = {
-  KIDS_PODCASTS: '@podcastim_cache_kids_podcasts_v2',
-  ALL_PODCASTS: '@podcastim_cache_all_podcasts_v2',
+  KIDS_PODCASTS: '@podcastim_cache_kids_podcasts_v3',
+  ALL_PODCASTS: '@podcastim_cache_all_podcasts_v3',
   CATEGORIES: '@podcastim_cache_categories_v1',
-  PODCAST_PREFIX: '@podcastim_cache_pod_v2_',
+  PODCAST_PREFIX: '@podcastim_cache_pod_v3_',
+  CATALOG_INDEX: '@podcastim_cache_catalog_index_v3',
 };
 
 // Helper to decode HTML entities in titles and descriptions
@@ -110,6 +111,25 @@ export function parseEpisodesFromContent(
           podcastImage,
         });
       }
+    }
+  }
+
+  // 3. Sort episodes chronologically: Episode 1 at the top (index 0)
+  if (episodes.length > 1) {
+    const getEpNum = (title: string): number | null => {
+      const m = title.match(/פרק\s*(\d+)/i) || title.match(/episode\s*(\d+)/i);
+      return m ? parseInt(m[1], 10) : null;
+    };
+    const firstNum = getEpNum(episodes[0].title);
+    const lastNum = getEpNum(episodes[episodes.length - 1].title);
+
+    if (firstNum !== null && lastNum !== null) {
+      if (firstNum > lastNum) {
+        episodes.reverse();
+      }
+    } else {
+      // Standard podcast feeds list newest first. Reverse so Episode 1 is first.
+      episodes.reverse();
     }
   }
 
@@ -441,4 +461,166 @@ function getCategoryColor(catId: number): string {
     default:
       return '#4A69BD';
   }
+}
+
+let memoryCatalogIndex: Podcast[] = [];
+let isCatalogSyncing = false;
+
+/**
+ * Initializes and retrieves the local podcast catalog index.
+ * Instant 0ms load from memory or disk, followed by background synchronization.
+ */
+export async function getOrLoadCatalogIndex(): Promise<Podcast[]> {
+  if (memoryCatalogIndex.length > 0) {
+    return memoryCatalogIndex;
+  }
+
+  try {
+    const diskData = await AsyncStorage.getItem(CACHE_KEYS.CATALOG_INDEX);
+    if (diskData) {
+      memoryCatalogIndex = JSON.parse(diskData);
+    }
+  } catch (e) {
+    console.warn('Error reading catalog index from storage', e);
+  }
+
+  // Trigger non-blocking background sync
+  syncCatalogIndexInBackground().catch(() => {});
+
+  return memoryCatalogIndex;
+}
+
+/**
+ * Syncs recent podcasts and kids catalog in the background.
+ */
+export async function syncCatalogIndexInBackground(): Promise<void> {
+  if (isCatalogSyncing) return;
+  isCatalogSyncing = true;
+
+  try {
+    // 1. Fetch all kids podcasts (99 items) with lightweight fields
+    const kidsUrl = `${BASE_URL}/posts?categories=${KIDS_CATEGORY_ID}&per_page=100&_embed=wp:featuredmedia&_fields=id,title,slug,link,categories,excerpt,date,_embedded,content`;
+    const resKids = await fetch(kidsUrl);
+    if (resKids.ok) {
+      const kidsPosts = await resKids.json();
+      if (Array.isArray(kidsPosts)) {
+        const parsedKids: Podcast[] = kidsPosts.map((post: any) => {
+          const title = decodeHtmlEntities(post.title?.rendered || '');
+          const imageUrl =
+            post._embedded?.['wp:featuredmedia']?.[0]?.source_url ||
+            'https://podcastim.org.il/wp-content/uploads/2023/04/אפליקציית-פודקאסטים-בעברית-אייקון-קטן.jpg';
+          const rawContent = post.content?.rendered || '';
+          const { rating, ratingCount } = parseRatingsFromContent(rawContent);
+
+          return {
+            id: post.id,
+            title,
+            slug: post.slug,
+            link: post.link,
+            imageUrl,
+            categories: post.categories || [KIDS_CATEGORY_ID],
+            excerpt: decodeHtmlEntities(post.excerpt?.rendered || ''),
+            episodeCount: 0,
+            episodes: [],
+            isKidFriendly: true,
+            date: post.date,
+            rating,
+            ratingCount,
+          };
+        });
+
+        const existingMap = new Map<number, Podcast>();
+        for (const item of memoryCatalogIndex) {
+          existingMap.set(item.id, item);
+        }
+        for (const item of parsedKids) {
+          existingMap.set(item.id, item);
+        }
+        memoryCatalogIndex = Array.from(existingMap.values());
+        await AsyncStorage.setItem(CACHE_KEYS.CATALOG_INDEX, JSON.stringify(memoryCatalogIndex));
+        await AsyncStorage.setItem(CACHE_KEYS.KIDS_PODCASTS, JSON.stringify(parsedKids));
+      }
+    }
+
+    // 2. Fetch top 100 recent podcasts for general catalog index
+    const allUrl = `${BASE_URL}/posts?per_page=100&_embed=wp:featuredmedia&_fields=id,title,slug,link,categories,excerpt,date,_embedded,content`;
+    const resAll = await fetch(allUrl);
+    if (resAll.ok) {
+      const allPosts = await resAll.json();
+      if (Array.isArray(allPosts)) {
+        const parsedAll: Podcast[] = allPosts.map((post: any) => {
+          const title = decodeHtmlEntities(post.title?.rendered || '');
+          const imageUrl =
+            post._embedded?.['wp:featuredmedia']?.[0]?.source_url ||
+            'https://podcastim.org.il/wp-content/uploads/2023/04/אפליקציית-פודקאסטים-בעברית-אייקון-קטן.jpg';
+          const rawContent = post.content?.rendered || '';
+          const { rating, ratingCount } = parseRatingsFromContent(rawContent);
+          const isKidFriendly = Array.isArray(post.categories) && post.categories.includes(KIDS_CATEGORY_ID);
+
+          return {
+            id: post.id,
+            title,
+            slug: post.slug,
+            link: post.link,
+            imageUrl,
+            categories: post.categories || [],
+            excerpt: decodeHtmlEntities(post.excerpt?.rendered || ''),
+            episodeCount: 0,
+            episodes: [],
+            isKidFriendly,
+            date: post.date,
+            rating,
+            ratingCount,
+          };
+        });
+
+        const existingMap = new Map<number, Podcast>();
+        for (const item of memoryCatalogIndex) {
+          existingMap.set(item.id, item);
+        }
+        for (const item of parsedAll) {
+          existingMap.set(item.id, item);
+        }
+        memoryCatalogIndex = Array.from(existingMap.values());
+        await AsyncStorage.setItem(CACHE_KEYS.CATALOG_INDEX, JSON.stringify(memoryCatalogIndex));
+      }
+    }
+  } catch (e) {
+    console.warn('Background catalog sync error:', e);
+  } finally {
+    isCatalogSyncing = false;
+  }
+}
+
+/**
+ * Instant local search with fast substring and topic matching
+ */
+export async function searchPodcastsFast(params: {
+  query: string;
+  isKids?: boolean;
+  categoryId?: number;
+}): Promise<Podcast[]> {
+  const { query, isKids, categoryId } = params;
+  const catalog = await getOrLoadCatalogIndex();
+
+  const cleanQuery = query.trim().toLowerCase();
+  if (!cleanQuery && !categoryId) {
+    return isKids ? catalog.filter((p) => p.isKidFriendly) : catalog.slice(0, 30);
+  }
+
+  const results = catalog.filter((podcast) => {
+    if (isKids && !podcast.isKidFriendly && !podcast.categories.includes(KIDS_CATEGORY_ID)) {
+      return false;
+    }
+    if (categoryId && !podcast.categories.includes(categoryId)) {
+      return false;
+    }
+    if (!cleanQuery) return true;
+
+    const titleMatch = podcast.title.toLowerCase().includes(cleanQuery);
+    const excerptMatch = podcast.excerpt?.toLowerCase().includes(cleanQuery);
+    return titleMatch || excerptMatch;
+  });
+
+  return results;
 }

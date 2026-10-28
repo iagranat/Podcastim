@@ -14,7 +14,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { PodcastCard } from '../../components/PodcastCard';
-import { fetchPodcasts, KIDS_CATEGORY_ID } from '../../api/podcastim';
+import { fetchPodcasts, searchPodcastsFast, getOrLoadCatalogIndex, KIDS_CATEGORY_ID } from '../../api/podcastim';
 import { Podcast } from '../../api/types';
 import { KIDS_TOPICS } from '../../constants/kidsTopics';
 
@@ -28,28 +28,55 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
+  // Preload local catalog index on screen mount for 0ms instant search
+  useEffect(() => {
+    getOrLoadCatalogIndex().catch(() => {});
+  }, []);
+
   const performSearch = useCallback(
     async (searchTerm: string) => {
-      if (!searchTerm || searchTerm.trim().length === 0) {
+      const trimmed = searchTerm.trim();
+      if (!trimmed) {
         setResults([]);
         setHasSearched(false);
+        setLoading(false);
         return;
       }
 
-      setLoading(true);
       setHasSearched(true);
-      try {
-        const catId = isKids ? KIDS_CATEGORY_ID : undefined;
-        const data = await fetchPodcasts({
-          search: searchTerm.trim(),
-          categoryId: catId,
-          perPage: 30,
-        });
-        setResults(data);
-      } catch (e) {
-        console.warn('Search error', e);
-        setResults([]);
-      } finally {
+
+      // 1. Instant local search (0ms latency from cached catalog index)
+      const instantResults = await searchPodcastsFast({
+        query: trimmed,
+        isKids,
+      });
+      setResults(instantResults);
+
+      // 2. If results are few or user is searching more specific terms, query remote API in background
+      if (instantResults.length < 10) {
+        setLoading(true);
+        try {
+          const catId = isKids ? KIDS_CATEGORY_ID : undefined;
+          const remoteData = await fetchPodcasts({
+            search: trimmed,
+            categoryId: catId,
+            perPage: 20,
+          });
+
+          if (remoteData.length > 0) {
+            // Merge remote items without duplicates
+            setResults((prev) => {
+              const existingIds = new Set(prev.map((p) => p.id));
+              const fresh = remoteData.filter((p) => !existingIds.has(p.id));
+              return [...prev, ...fresh];
+            });
+          }
+        } catch (e) {
+          console.warn('Remote search error', e);
+        } finally {
+          setLoading(false);
+        }
+      } else {
         setLoading(false);
       }
     },
@@ -96,9 +123,9 @@ export default function SearchScreen() {
             value={query}
             onChangeText={(text) => {
               setQuery(text);
-              if (text.length > 2) {
+              if (text.trim().length > 0) {
                 performSearch(text);
-              } else if (text.length === 0) {
+              } else {
                 handleClear();
               }
             }}
