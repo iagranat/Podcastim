@@ -101,7 +101,9 @@ npm run web
 ### 4. בניית קובץ APK אוטומטית (Automated GitHub Actions CI/CD)
 בפרויקט מוגדר תהליך CI/CD אוטומטי מלא ב-**GitHub Actions** (`.github/workflows/build-apk.yml`):
 - **בכל Commit / Push לענף הראשי (`main`)**: GitHub Actions מבצע בנייה מלאה (`expo prebuild` ו-Gradle) ומייצר קובצי APK מוכנים להתקנה מיידית על כל מכשיר אנדרואיד.
-- **הורדת ה-APK**: נכנסים ללשונית **Actions** במאגר ה-GitHub שלכם, בוחרים את הריצה האחרונה, ומורידים את הקובץ תחת **Artifacts** (`Podcastim-Android-APK`).
+- **הורדת ה-APK ללא כיווץ (Direct APK)**:
+  - הורדה ישירה ללא צורך בחילוץ קובץ זיפ: **[הורדת podcastim-debug.apk ישירות](https://github.com/iagranat/Podcastim/releases/download/latest/podcastim-debug.apk)**.
+  - ניתן להוריד גם ישירות מלשונית **Releases** תחת **Latest Android APK Build** או תחת **Artifacts** בריצות ה-Actions.
 - **גרסאות רשמיות (Releases)**: ביצוע תיוג גרסה (Tag, למשל `v1.0.0`) מפרסם אוטומטית Release רשמי עם קובץ ה-APK להורדה ישירה.
 
 בנוסף, ניתן לבנות ישירות בענן דרך EAS Build:
