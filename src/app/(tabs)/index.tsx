@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
+import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { PodcastCard } from '../../components/PodcastCard';
 import { KidsHeroBanner } from '../../components/KidsHeroBanner';
 import { ModeSwitchPill } from '../../components/ModeSwitchPill';
@@ -21,6 +22,7 @@ import { KidsTopic } from '../../constants/kidsTopics';
 
 export default function HomeScreen() {
   const { theme, mode } = useApp();
+  const { currentEpisode } = useAudioPlayer();
   const isKids = mode === 'kids';
 
   const [podcasts, setPodcasts] = useState<Podcast[]>([]);
@@ -96,7 +98,10 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: currentEpisode ? 90 : 24 },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

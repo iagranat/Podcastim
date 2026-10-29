@@ -9,7 +9,7 @@ import {
   Share,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
@@ -22,8 +22,10 @@ import { AudioPlayerMini } from '../../components/AudioPlayerMini';
 export default function PodcastDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme, mode, isFavorite, toggleFavorite } = useApp();
-  const { playEpisode } = useAudioPlayer();
+  const { playEpisode, currentEpisode } = useAudioPlayer();
+  const insets = useSafeAreaInsets();
   const isKids = mode === 'kids';
+  const bottomInset = Math.max(insets.bottom, 10);
 
   const [podcast, setPodcast] = useState<Podcast | null>(null);
   const [loading, setLoading] = useState(true);
@@ -137,7 +139,12 @@ export default function PodcastDetailScreen() {
 
       {/* Podcast Content */}
       {podcast && !loading && (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: 80 + bottomInset + (currentEpisode ? 75 : 0) },
+          ]}
+        >
           {/* Header Section: Image + Title */}
           <View style={styles.podcastHeader}>
             <Image
@@ -296,9 +303,11 @@ export default function PodcastDetailScreen() {
       )}
 
       {/* Mini Player */}
-      <View style={styles.miniPlayerContainer}>
-        <AudioPlayerMini />
-      </View>
+      {currentEpisode ? (
+        <View style={[styles.miniPlayerContainer, { bottom: bottomInset }]}>
+          <AudioPlayerMini />
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }

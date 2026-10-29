@@ -18,7 +18,7 @@ import { SleepTimerModal } from '../../components/SleepTimerModal';
 
 export default function SettingsScreen() {
   const { mode, setMode, theme, parentLockEnabled, setParentLockEnabled } = useApp();
-  const { sleepTimerOption, cancelSleepTimer } = useAudioPlayer();
+  const { sleepTimerOption, cancelSleepTimer, currentEpisode } = useAudioPlayer();
 
   const [gateVisible, setGateVisible] = useState(false);
   const [sleepModalVisible, setSleepModalVisible] = useState(false);
@@ -55,7 +55,12 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: currentEpisode ? 90 : 24 },
+        ]}
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.screenTitle, { color: theme.colors.text }]}>

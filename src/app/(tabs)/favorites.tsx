@@ -9,7 +9,7 @@ import { EpisodeItem } from '../../components/EpisodeItem';
 
 export default function FavoritesScreen() {
   const { theme, mode, favorites, history } = useApp();
-  const { playEpisode } = useAudioPlayer();
+  const { playEpisode, currentEpisode } = useAudioPlayer();
   const isKids = mode === 'kids';
 
   const [activeTab, setActiveTab] = useState<'favorites' | 'history'>('favorites');
@@ -97,7 +97,10 @@ export default function FavoritesScreen() {
           <FlatList
             data={favorites}
             keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: currentEpisode ? 90 : 24 },
+            ]}
             renderItem={({ item }) => <PodcastCard podcast={item} horizontal />}
           />
         ) : (
@@ -117,7 +120,10 @@ export default function FavoritesScreen() {
         <FlatList
           data={history}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: currentEpisode ? 90 : 24 },
+          ]}
           renderItem={({ item, index }) => (
             <EpisodeItem episode={item} playlist={history} index={index} />
           )}

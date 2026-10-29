@@ -2,12 +2,20 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
+import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { AudioPlayerMini } from '../../components/AudioPlayerMini';
 
 export default function TabsLayout() {
   const { theme, mode } = useApp();
+  const { currentEpisode } = useAudioPlayer();
+  const insets = useSafeAreaInsets();
   const isKids = mode === 'kids';
+
+  // Compute safe bottom padding for Android 3-button navigation or iOS home bar
+  const bottomInset = Math.max(insets.bottom, 8);
+  const tabBarHeight = 58 + bottomInset;
 
   return (
     <View style={styles.container}>
@@ -18,9 +26,9 @@ export default function TabsLayout() {
             backgroundColor: theme.colors.card,
             borderTopColor: theme.colors.border,
             borderTopWidth: 1,
-            height: 64,
-            paddingBottom: 8,
-            paddingTop: 8,
+            height: tabBarHeight,
+            paddingBottom: bottomInset,
+            paddingTop: 6,
           },
           tabBarActiveTintColor: isKids ? theme.colors.primary : theme.colors.primary,
           tabBarInactiveTintColor: theme.colors.textMuted,
@@ -87,10 +95,12 @@ export default function TabsLayout() {
         />
       </Tabs>
 
-      {/* Floating mini player docked above bottom navigation */}
-      <View style={styles.miniPlayerWrapper}>
-        <AudioPlayerMini />
-      </View>
+      {/* Floating mini player docked safely above bottom navigation */}
+      {currentEpisode ? (
+        <View style={[styles.miniPlayerWrapper, { bottom: tabBarHeight + 4 }]}>
+          <AudioPlayerMini />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -101,7 +111,6 @@ const styles = StyleSheet.create({
   },
   miniPlayerWrapper: {
     position: 'absolute',
-    bottom: 64, // Directly above the 64px tab bar
     left: 0,
     right: 0,
   },

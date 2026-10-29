@@ -107,7 +107,7 @@ export const AudioPlayerMini: React.FC = () => {
 const styles = StyleSheet.create({
   outerContainer: {
     paddingHorizontal: 12,
-    paddingBottom: 6,
+    paddingBottom: 0,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,

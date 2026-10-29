@@ -11,6 +11,7 @@ import {
 import { Image } from 'expo-image';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAudioPlayer } from '../context/AudioPlayerContext';
 import { useApp } from '../context/AppContext';
 import { formatTime, formatSleepTimerRemaining } from '../utils/format';
@@ -40,6 +41,7 @@ export const AudioPlayerModal: React.FC = () => {
   } = useAudioPlayer();
 
   const { theme, mode, isFavorite, toggleFavorite } = useApp();
+  const insets = useSafeAreaInsets();
   const [isSleepModalOpen, setIsSleepModalOpen] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekingPosition, setSeekingPosition] = useState(0);
@@ -64,7 +66,16 @@ export const AudioPlayerModal: React.FC = () => {
       presentationStyle="fullScreen"
       onRequestClose={closePlayerModal}
     >
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.colors.background,
+            paddingTop: Math.max(insets.top, 24),
+            paddingBottom: Math.max(insets.bottom, 24),
+          },
+        ]}
+      >
         {/* Top Navigation Bar */}
         <View style={styles.topBar}>
           <TouchableOpacity

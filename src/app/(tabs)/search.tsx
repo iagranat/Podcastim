@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
+import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { PodcastCard } from '../../components/PodcastCard';
 import { fetchPodcasts, searchPodcastsFast, getOrLoadCatalogIndex, sortPodcasts, KIDS_CATEGORY_ID } from '../../api/podcastim';
 import { Podcast } from '../../api/types';
@@ -22,6 +23,7 @@ type SearchSortOption = 'relevance' | 'rating' | 'date' | 'name';
 
 export default function SearchScreen() {
   const { theme, mode } = useApp();
+  const { currentEpisode } = useAudioPlayer();
   const isKids = mode === 'kids';
   const localParams = useLocalSearchParams<{ q?: string }>();
 
@@ -146,7 +148,12 @@ export default function SearchScreen() {
 
       {/* Suggested Topics (When no search has been performed) */}
       {!hasSearched && query.length === 0 ? (
-        <ScrollView contentContainerStyle={styles.suggestionsContainer}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.suggestionsContainer,
+            { paddingBottom: currentEpisode ? 90 : 24 },
+          ]}
+        >
           <Text style={[styles.suggestionsTitle, { color: theme.colors.text }]}>
             {isKids ? '🎯 נושאים אהובים לחיפוש' : 'נושאים פופולריים'}
           </Text>
@@ -204,7 +211,10 @@ export default function SearchScreen() {
             <FlatList
               data={displayedResults}
               keyExtractor={(item) => String(item.id)}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[
+                styles.listContent,
+                { paddingBottom: currentEpisode ? 90 : 24 },
+              ]}
               renderItem={({ item }) => <PodcastCard podcast={item} horizontal />}
               ListHeaderComponent={
                 <View style={styles.resultsHeader}>
