@@ -56,6 +56,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [sleepTimerOption, setSleepTimerOption] = useState<number | null>(null);
   const [sleepTimerRemaining, setSleepTimerRemaining] = useState<number | null>(null);
   const sleepTimerRef = useRef<any>(null);
+  const playRequestIdRef = useRef<number>(0);
 
   // Initialize audio mode for background playback & lockscreen controls
   useEffect(() => {
@@ -140,9 +141,10 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setIsPlaying(false);
     }
 
-    // Auto mark as listened when reached >80% or finished
+    // Auto mark as listened when reached >= 95% or finished
     if (currentEpisode && status.duration && status.currentTime) {
-      if (status.currentTime / status.duration > 0.8 || status.didJustFinish) {
+      const progress = status.currentTime / status.duration;
+      if (progress >= 0.95 || status.didJustFinish) {
         markEpisodeListened(currentEpisode.id);
       }
     }
@@ -158,6 +160,20 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   const playEpisode = async (episode: Episode, newPlaylist?: Episode[]) => {
+    // 1. Immediately stop, clear, and discard any previously playing instance to prevent audio overlap!
+    if (playerRef.current) {
+      try {
+        playerRef.current.pause();
+        playerRef.current.clearLockScreenControls();
+      } catch (_) {}
+      try {
+        playerRef.current.remove();
+      } catch (_) {}
+      playerRef.current = null;
+    }
+
+    const currentRequestId = ++playRequestIdRef.current;
+
     try {
       setIsLoading(true);
       setErrorMessage(null);
@@ -166,15 +182,6 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setPlaylist(newPlaylist);
       } else if (!playlist.some((e) => e.id === episode.id)) {
         setPlaylist([episode]);
-      }
-
-      // Cleanup previous player instance
-      if (playerRef.current) {
-        try {
-          playerRef.current.clearLockScreenControls();
-        } catch (_) {}
-        playerRef.current.remove();
-        playerRef.current = null;
       }
 
       setCurrentEpisode(episode);
@@ -188,6 +195,15 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       const newPlayer = createAudioPlayer(episode.src, {
         updateInterval: 500,
       });
+
+      // If another play request came in while creating the player, abort this player immediately
+      if (playRequestIdRef.current !== currentRequestId) {
+        try {
+          newPlayer.pause();
+          newPlayer.remove();
+        } catch (_) {}
+        return;
+      }
 
       // Enable system lockscreen and notification center media controls
       try {
@@ -218,10 +234,12 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setIsPlaying(true);
       setIsLoading(false);
     } catch (e: any) {
-      console.warn('Playback error', e);
-      setErrorMessage('לא ניתן להשמיע פרק זה כרגע. אנא נסו פרק אחר.');
-      setIsLoading(false);
-      setIsPlaying(false);
+      if (playRequestIdRef.current === currentRequestId) {
+        console.warn('Playback error', e);
+        setErrorMessage('לא ניתן להשמיע פרק זה כרגע. אנא נסו פרק אחר.');
+        setIsLoading(false);
+        setIsPlaying(false);
+      }
     }
   };
 
@@ -267,17 +285,26 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const playNext = async () => {
     if (!currentEpisode || playlist.length === 0) return;
-    const currentIndex = playlist.findIndex((e) => e.id === currentEpisode.id);
-    if (currentIndex !== -1 && currentIndex + 1 < playlist.length) {
-      await playEpisode(playlist[currentIndex + 1], playlist);
+    // Always advance strictly within the same podcast to prevent jumping across podcasts!
+    const samePodcastEpisodes = playlist.filter(
+      (e) => e.podcastId === currentEpisode.podcastId
+    );
+    const targetList = samePodcastEpisodes.length > 0 ? samePodcastEpisodes : playlist;
+    const currentIndex = targetList.findIndex((e) => e.id === currentEpisode.id);
+    if (currentIndex !== -1 && currentIndex + 1 < targetList.length) {
+      await playEpisode(targetList[currentIndex + 1], targetList);
     }
   };
 
   const playPrevious = async () => {
     if (!currentEpisode || playlist.length === 0) return;
-    const currentIndex = playlist.findIndex((e) => e.id === currentEpisode.id);
+    const samePodcastEpisodes = playlist.filter(
+      (e) => e.podcastId === currentEpisode.podcastId
+    );
+    const targetList = samePodcastEpisodes.length > 0 ? samePodcastEpisodes : playlist;
+    const currentIndex = targetList.findIndex((e) => e.id === currentEpisode.id);
     if (currentIndex > 0) {
-      await playEpisode(playlist[currentIndex - 1], playlist);
+      await playEpisode(targetList[currentIndex - 1], targetList);
     } else {
       await seekTo(0);
     }

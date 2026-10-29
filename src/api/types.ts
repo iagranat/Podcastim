@@ -46,3 +46,7 @@ export interface SleepTimerOption {
   label: string;
   minutes: number | null; // null for end of episode
 }
+
+export type PodcastSortOption = 'date' | 'rating' | 'name';
+export type EpisodeSortOption = 'asc' | 'desc';
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,11 @@ import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { PodcastCard } from '../../components/PodcastCard';
-import { fetchPodcasts, searchPodcastsFast, getOrLoadCatalogIndex, KIDS_CATEGORY_ID } from '../../api/podcastim';
+import { fetchPodcasts, searchPodcastsFast, getOrLoadCatalogIndex, sortPodcasts, KIDS_CATEGORY_ID } from '../../api/podcastim';
 import { Podcast } from '../../api/types';
 import { KIDS_TOPICS } from '../../constants/kidsTopics';
+
+type SearchSortOption = 'relevance' | 'rating' | 'date' | 'name';
 
 export default function SearchScreen() {
   const { theme, mode } = useApp();
@@ -25,6 +27,7 @@ export default function SearchScreen() {
 
   const [query, setQuery] = useState(localParams.q || '');
   const [results, setResults] = useState<Podcast[]>([]);
+  const [sortBy, setSortBy] = useState<SearchSortOption>('relevance');
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -187,17 +190,126 @@ export default function SearchScreen() {
 
       {/* Search Results List */}
       {!loading && hasSearched && results.length > 0 ? (
-        <FlatList
-          data={results}
-          keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => <PodcastCard podcast={item} horizontal />}
-          ListHeaderComponent={
-            <Text style={[styles.resultsCount, { color: theme.colors.textSecondary }]}>
-              נמצאו {results.length} תוצאות עבור &quot;{query}&quot;
-            </Text>
-          }
-        />
+        (() => {
+          const displayedResults =
+            sortBy === 'rating'
+              ? sortPodcasts(results, 'rating')
+              : sortBy === 'date'
+              ? sortPodcasts(results, 'date')
+              : sortBy === 'name'
+              ? sortPodcasts(results, 'name')
+              : results;
+
+          return (
+            <FlatList
+              data={displayedResults}
+              keyExtractor={(item) => String(item.id)}
+              contentContainerStyle={styles.listContent}
+              renderItem={({ item }) => <PodcastCard podcast={item} horizontal />}
+              ListHeaderComponent={
+                <View style={styles.resultsHeader}>
+                  <Text style={[styles.resultsCount, { color: theme.colors.textSecondary }]}>
+                    נמצאו {results.length} תוצאות עבור &quot;{query}&quot;
+                  </Text>
+
+                  {/* Search Sort Bar */}
+                  <View style={styles.sortBar}>
+                    <Text style={[styles.sortLabel, { color: theme.colors.textSecondary }]}>מיון:</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.sortOptionsRow}
+                    >
+                      <TouchableOpacity
+                        onPress={() => setSortBy('relevance')}
+                        style={[
+                          styles.sortPill,
+                          {
+                            backgroundColor: sortBy === 'relevance' ? theme.colors.primary : theme.colors.card,
+                            borderColor: sortBy === 'relevance' ? theme.colors.primary : theme.colors.border,
+                            borderRadius: isKids ? 16 : 10,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.sortPillText,
+                            { color: sortBy === 'relevance' ? '#FFFFFF' : theme.colors.text },
+                          ]}
+                        >
+                          התאמה
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => setSortBy('rating')}
+                        style={[
+                          styles.sortPill,
+                          {
+                            backgroundColor: sortBy === 'rating' ? theme.colors.primary : theme.colors.card,
+                            borderColor: sortBy === 'rating' ? theme.colors.primary : theme.colors.border,
+                            borderRadius: isKids ? 16 : 10,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.sortPillText,
+                            { color: sortBy === 'rating' ? '#FFFFFF' : theme.colors.text },
+                          ]}
+                        >
+                          ⭐ דירוג
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => setSortBy('date')}
+                        style={[
+                          styles.sortPill,
+                          {
+                            backgroundColor: sortBy === 'date' ? theme.colors.primary : theme.colors.card,
+                            borderColor: sortBy === 'date' ? theme.colors.primary : theme.colors.border,
+                            borderRadius: isKids ? 16 : 10,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.sortPillText,
+                            { color: sortBy === 'date' ? '#FFFFFF' : theme.colors.text },
+                          ]}
+                        >
+                          🕒 תאריך
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => setSortBy('name')}
+                        style={[
+                          styles.sortPill,
+                          {
+                            backgroundColor: sortBy === 'name' ? theme.colors.primary : theme.colors.card,
+                            borderColor: sortBy === 'name' ? theme.colors.primary : theme.colors.border,
+                            borderRadius: isKids ? 16 : 10,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.sortPillText,
+                            { color: sortBy === 'name' ? '#FFFFFF' : theme.colors.text },
+                          ]}
+                        >
+                          🔤 שם
+                        </Text>
+                      </TouchableOpacity>
+                    </ScrollView>
+                  </View>
+                </View>
+              }
+            />
+          );
+        })()
       ) : null}
 
       {/* No Results Empty State */}
@@ -276,10 +388,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 90,
   },
+  resultsHeader: {
+    marginBottom: 12,
+  },
   resultsCount: {
     fontSize: 13,
-    marginBottom: 12,
+    marginBottom: 8,
     textAlign: 'left',
+  },
+  sortBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sortLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sortOptionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  sortPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+  },
+  sortPillText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   centerContainer: {
     flex: 1,

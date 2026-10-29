@@ -15,6 +15,10 @@ export const PodcastCard: React.FC<PodcastCardProps> = ({ podcast, horizontal = 
   const { theme, mode, isFavorite, toggleFavorite } = useApp();
   const isKids = mode === 'kids';
   const isFav = isFavorite(podcast.id);
+  const fallbackImage =
+    'https://podcastim.org.il/wp-content/uploads/2023/04/אפליקציית-פודקאסטים-בעברית-אייקון-קטן.jpg';
+  const imageSource =
+    podcast.imageUrl && podcast.imageUrl.startsWith('http') ? podcast.imageUrl : fallbackImage;
 
   const handlePress = () => {
     router.push({
@@ -39,9 +43,10 @@ export const PodcastCard: React.FC<PodcastCardProps> = ({ podcast, horizontal = 
         ]}
       >
         <Image
-          source={{ uri: podcast.imageUrl }}
+          source={{ uri: imageSource }}
           cachePolicy="memory-disk"
           transition={200}
+          contentFit="cover"
           style={[styles.horizontalImage, { borderRadius: isKids ? 16 : 10 }]}
         />
         <View style={styles.horizontalContent}>
@@ -120,7 +125,7 @@ export const PodcastCard: React.FC<PodcastCardProps> = ({ podcast, horizontal = 
     >
       <View style={styles.imageContainer}>
         <Image
-          source={{ uri: podcast.imageUrl }}
+          source={{ uri: imageSource }}
           cachePolicy="memory-disk"
           transition={200}
           contentFit="cover"

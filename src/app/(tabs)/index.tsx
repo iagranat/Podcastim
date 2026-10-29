@@ -15,8 +15,8 @@ import { useApp } from '../../context/AppContext';
 import { PodcastCard } from '../../components/PodcastCard';
 import { KidsHeroBanner } from '../../components/KidsHeroBanner';
 import { ModeSwitchPill } from '../../components/ModeSwitchPill';
-import { fetchPodcasts, fetchCategories, getOrLoadCatalogIndex, KIDS_CATEGORY_ID } from '../../api/podcastim';
-import { Podcast, Category } from '../../api/types';
+import { fetchPodcasts, fetchCategories, getOrLoadCatalogIndex, sortPodcasts, KIDS_CATEGORY_ID } from '../../api/podcastim';
+import { Podcast, Category, PodcastSortOption } from '../../api/types';
 import { KidsTopic } from '../../constants/kidsTopics';
 
 export default function HomeScreen() {
@@ -28,6 +28,7 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>(
     isKids ? KIDS_CATEGORY_ID : undefined
   );
+  const [sortBy, setSortBy] = useState<PodcastSortOption>('date');
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -196,8 +197,68 @@ export default function HomeScreen() {
               </Text>
             </View>
 
+            {/* Sort Mechanism Bar */}
+            {podcasts.length > 1 && (
+              <View style={styles.sortBar}>
+                <Text style={[styles.sortLabel, { color: theme.colors.textSecondary }]}>מיון:</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.sortOptionsRow}
+                >
+                  <TouchableOpacity
+                    onPress={() => setSortBy('date')}
+                    style={[
+                      styles.sortPill,
+                      {
+                        backgroundColor: sortBy === 'date' ? theme.colors.primary : theme.colors.card,
+                        borderColor: sortBy === 'date' ? theme.colors.primary : theme.colors.border,
+                        borderRadius: isKids ? 16 : 10,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.sortPillText, { color: sortBy === 'date' ? '#FFFFFF' : theme.colors.text }]}>
+                      🕒 תאריך עדכון
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setSortBy('rating')}
+                    style={[
+                      styles.sortPill,
+                      {
+                        backgroundColor: sortBy === 'rating' ? theme.colors.primary : theme.colors.card,
+                        borderColor: sortBy === 'rating' ? theme.colors.primary : theme.colors.border,
+                        borderRadius: isKids ? 16 : 10,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.sortPillText, { color: sortBy === 'rating' ? '#FFFFFF' : theme.colors.text }]}>
+                      ⭐ דירוג גבוה
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setSortBy('name')}
+                    style={[
+                      styles.sortPill,
+                      {
+                        backgroundColor: sortBy === 'name' ? theme.colors.primary : theme.colors.card,
+                        borderColor: sortBy === 'name' ? theme.colors.primary : theme.colors.border,
+                        borderRadius: isKids ? 16 : 10,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.sortPillText, { color: sortBy === 'name' ? '#FFFFFF' : theme.colors.text }]}>
+                      🔤 שם (א-ת)
+                    </Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            )}
+
             <View style={styles.grid}>
-              {podcasts.map((podcast) => (
+              {sortPodcasts(podcasts, sortBy).map((podcast) => (
                 <PodcastCard key={podcast.id} podcast={podcast} />
               ))}
             </View>
@@ -307,6 +368,30 @@ const styles = StyleSheet.create({
   },
   countBadge: {
     fontSize: 13,
+  },
+  sortBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  sortLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sortOptionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  sortPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+  },
+  sortPillText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   grid: {
     flexDirection: 'row-reverse',

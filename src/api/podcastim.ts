@@ -1,28 +1,64 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Episode, Podcast, Category } from './types';
+import { Episode, Podcast, Category, PodcastSortOption } from './types';
 
 const BASE_URL = 'https://podcastim.org.il/wp-json/wp/v2';
 export const KIDS_CATEGORY_ID = 8; // Official 'ילדים' category on podcastim.org.il
 
 const CACHE_KEYS = {
-  KIDS_PODCASTS: '@podcastim_cache_kids_podcasts_v3',
-  ALL_PODCASTS: '@podcastim_cache_all_podcasts_v3',
+  KIDS_PODCASTS: '@podcastim_cache_kids_podcasts_v4',
+  ALL_PODCASTS: '@podcastim_cache_all_podcasts_v4',
   CATEGORIES: '@podcastim_cache_categories_v1',
-  PODCAST_PREFIX: '@podcastim_cache_pod_v3_',
-  CATALOG_INDEX: '@podcastim_cache_catalog_index_v3',
+  PODCAST_PREFIX: '@podcastim_cache_pod_v4_',
+  CATALOG_INDEX: '@podcastim_cache_catalog_index_v4',
 };
 
-// Helper to decode HTML entities in titles and descriptions
+const HEBREW_NUM_WORDS: Record<string, number> = {
+  'ראשון': 1,
+  'ראשונה': 1,
+  'שני': 2,
+  'שניה': 2,
+  'שנייה': 2,
+  'שלישי': 3,
+  'שלישית': 3,
+  'רביעי': 4,
+  'רביעית': 4,
+  'חמישי': 5,
+  'חמישית': 5,
+  'שישי': 6,
+  'שישית': 6,
+  'שביעי': 7,
+  'שביעית': 7,
+  'שמיני': 8,
+  'שמינית': 8,
+  'תשיעי': 9,
+  'תשיעית': 9,
+  'עשירי': 10,
+  'עשירית': 10,
+};
+
+// Helper to decode HTML entities, unicode escapes, and quotes in titles and descriptions
 export function decodeHtmlEntities(str: string): string {
   if (!str) return '';
   return str
+    // Decode unicode character escapes (e.g. \u05d0 -> א)
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    // Common HTML typography entities
     .replace(/&#8211;/g, '–')
     .replace(/&#8217;/g, '’')
     .replace(/&#8220;/g, '“')
     .replace(/&#8221;/g, '”')
     .replace(/&#8230;/g, '…')
+    .replace(/&#8243;/g, '″')
+    .replace(/&ldquo;/g, '“')
+    .replace(/&rdquo;/g, '”')
+    // Quotes and apostrophes
     .replace(/&#039;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
     .replace(/&quot;/g, '"')
+    .replace(/&#034;/g, '"')
+    .replace(/&#34;/g, '"')
+    // Tags and symbols
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -30,6 +66,38 @@ export function decodeHtmlEntities(str: string): string {
     .replace(/<[^>]*>?/gm, '') // Strip remaining HTML tags
     .trim();
 }
+
+export function getEpisodeNumber(title: string): number | null {
+  if (!title) return null;
+  // Check Hebrew written ordinals like פרק ראשון, פרק שני
+  const mWord = title.match(/פרק\s+(ראשון|ראשונה|שני|שניה|שנייה|שלישי|שלישית|רביעי|רביעית|חמישי|חמישית|שישי|שישית|שביעי|שביעית|שמיני|שמינית|תשיעי|תשיעית|עשירי|עשירית)/i);
+  if (mWord && HEBREW_NUM_WORDS[mWord[1]]) {
+    return HEBREW_NUM_WORDS[mWord[1]];
+  }
+  // Check numeric expressions like פרק 8, episode 8, פרק: 8, פרק מס' 8
+  const m = title.match(/(?:פרק|episode)\s*(?:מס'|מספר|[:#\s])*\s*(\d+)/i);
+  if (m) return parseInt(m[1], 10);
+  const m2 = title.match(/#(\d+)/);
+  if (m2) return parseInt(m2[1], 10);
+  return null;
+}
+
+export function parseDateToTime(dateStr?: string): number {
+  if (!dateStr) return 0;
+  const clean = dateStr.replace(/\\/g, '').trim();
+  const parts = clean.split('/');
+  if (parts.length === 3) {
+    const d = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const y = parseInt(parts[2], 10);
+    return new Date(y, m, d).getTime();
+  }
+  const t = new Date(clean).getTime();
+  return isNaN(t) ? 0 : t;
+}
+
+const PPS_KNOWN_KEYS =
+  'title|description|author|date|link|src|mediatype|season|categories|duration|episodetype|source_mime|source_format|is_hls|timestamp|key';
 
 /**
  * Extracts episodes from WordPress post content rendered by Podcast Player plugin
@@ -46,7 +114,7 @@ export function parseEpisodesFromContent(
   const ppsMatch = content.match(/data-ppsdata="([^"]+)"/);
   if (ppsMatch) {
     const raw = ppsMatch[1];
-    const regex = /&quot;(ppe-[^&quot;]+)&quot;:\s*\{(&quot;title&quot;[\s\S]*?&quot;key&quot;:&quot;[^&quot;]+&quot;)\}/g;
+    const regex = /&quot;(ppe-[^&quot;]+)&quot;:\s*\{([\s\S]*?&quot;key&quot;:&quot;[^&quot;]+&quot;)\}/g;
     let match;
 
     while ((match = regex.exec(raw)) !== null) {
@@ -54,22 +122,24 @@ export function parseEpisodesFromContent(
       const block = match[2];
 
       const getField = (fieldName: string): string | undefined => {
-        const fieldRegex = new RegExp(`&quot;${fieldName}&quot;:\\s*(&quot;([\\s\\S]*?)&quot;|(\\d+)|true|false|\\[[^\\]]*\\])`);
-        const fm = block.match(fieldRegex);
-        if (!fm) return undefined;
-        if (fm[2] !== undefined) {
-          try {
-            return JSON.parse(`"${fm[2]}"`);
-          } catch {
-            return fm[2];
-          }
-        }
-        return fm[1];
+        // Match string until the next known property key or ending brace, preventing embedded quotes from breaking fields
+        const strRegex = new RegExp(
+          `&quot;${fieldName}&quot;:\\s*&quot;([\\s\\S]*?)&quot;(?=\\s*,\\s*&quot;(?:${PPS_KNOWN_KEYS})&quot;|\\s*\\})`
+        );
+        const sm = block.match(strRegex);
+        if (sm) return sm[1];
+
+        // Non-string fields (number, boolean, array)
+        const valRegex = new RegExp(`&quot;${fieldName}&quot;:\\s*([0-9]+|true|false|\\[[^\\]]*\\])`);
+        const vm = block.match(valRegex);
+        if (vm) return vm[1];
+
+        return undefined;
       };
 
       const titleRaw = getField('title') || '';
       const author = getField('author');
-      const date = getField('date');
+      const dateRaw = getField('date');
       const link = getField('link');
       const srcRaw = getField('src');
       const duration = getField('duration');
@@ -78,12 +148,13 @@ export function parseEpisodesFromContent(
 
       if (srcRaw) {
         const src = srcRaw.replace(/\\\//g, '/');
+        const cleanDate = dateRaw ? dateRaw.replace(/\\\//g, '/') : undefined;
         episodes.push({
           id: `${podcastId}-${key}`,
           title: decodeHtmlEntities(titleRaw) || `פרק ${episodes.length + 1}`,
           author: author ? decodeHtmlEntities(author) : undefined,
-          date,
-          link,
+          date: cleanDate,
+          link: link ? link.replace(/\\\//g, '/') : undefined,
           src,
           duration,
           description: decodeHtmlEntities(descRaw),
@@ -114,22 +185,28 @@ export function parseEpisodesFromContent(
     }
   }
 
-  // 3. Sort episodes chronologically: Episode 1 at the top (index 0)
+  // 3. Sort episodes chronologically ascending so Episode 1 is ALWAYS at the top (index 0)
   if (episodes.length > 1) {
-    const getEpNum = (title: string): number | null => {
-      const m = title.match(/פרק\s*(\d+)/i) || title.match(/episode\s*(\d+)/i);
-      return m ? parseInt(m[1], 10) : null;
-    };
-    const firstNum = getEpNum(episodes[0].title);
-    const lastNum = getEpNum(episodes[episodes.length - 1].title);
+    const parsedWithNums = episodes.map((ep) => ({
+      ep,
+      num: getEpisodeNumber(ep.title),
+      time: parseDateToTime(ep.date),
+    }));
 
-    if (firstNum !== null && lastNum !== null) {
-      if (firstNum > lastNum) {
-        episodes.reverse();
-      }
+    const hasNums =
+      parsedWithNums.filter((p) => p.num !== null).length >= Math.ceil(episodes.length * 0.4);
+
+    if (hasNums) {
+      parsedWithNums.sort((a, b) => {
+        if (a.num !== null && b.num !== null) return a.num - b.num;
+        if (a.num !== null) return -1;
+        if (b.num !== null) return 1;
+        return a.time - b.time;
+      });
+      return parsedWithNums.map((p) => p.ep);
     } else {
-      // Standard podcast feeds list newest first. Reverse so Episode 1 is first.
-      episodes.reverse();
+      parsedWithNums.sort((a, b) => a.time - b.time);
+      return parsedWithNums.map((p) => p.ep);
     }
   }
 
@@ -200,9 +277,7 @@ export async function fetchPodcasts(params?: {
 
     const parsed: Podcast[] = data.map((post: any) => {
       const title = decodeHtmlEntities(post.title?.rendered || '');
-      const imageUrl =
-        post._embedded?.['wp:featuredmedia']?.[0]?.source_url ||
-        'https://podcastim.org.il/wp-content/uploads/2023/04/אפליקציית-פודקאסטים-בעברית-אייקון-קטן.jpg';
+      const imageUrl = extractFeaturedImage(post);
 
       const rawContent = post.content?.rendered || '';
       const episodes = parseEpisodesFromContent(rawContent, post.id, title, imageUrl);
@@ -276,9 +351,7 @@ export async function fetchPodcastById(id: number): Promise<Podcast> {
         .then((post) => {
           if (post && post.id) {
             const title = decodeHtmlEntities(post.title?.rendered || '');
-            const imageUrl =
-              post._embedded?.['wp:featuredmedia']?.[0]?.source_url ||
-              'https://podcastim.org.il/wp-content/uploads/2023/04/אפליקציית-פודקאסטים-בעברית-אייקון-קטן.jpg';
+            const imageUrl = extractFeaturedImage(post);
             const rawContent = post.content?.rendered || '';
             const episodes = parseEpisodesFromContent(rawContent, post.id, title, imageUrl);
             const { rating, ratingCount } = parseRatingsFromContent(rawContent);
@@ -313,9 +386,7 @@ export async function fetchPodcastById(id: number): Promise<Podcast> {
   const post = await res.json();
 
   const title = decodeHtmlEntities(post.title?.rendered || '');
-  const imageUrl =
-    post._embedded?.['wp:featuredmedia']?.[0]?.source_url ||
-    'https://podcastim.org.il/wp-content/uploads/2023/04/אפליקציית-פודקאסטים-בעברית-אייקון-קטן.jpg';
+  const imageUrl = extractFeaturedImage(post);
 
   const rawContent = post.content?.rendered || '';
   const episodes = parseEpisodesFromContent(rawContent, post.id, title, imageUrl);
@@ -490,6 +561,38 @@ export async function getOrLoadCatalogIndex(): Promise<Podcast[]> {
   return memoryCatalogIndex;
 }
 
+function extractFeaturedImage(post: any): string {
+  return (
+    post._embedded?.['wp:featuredmedia']?.[0]?.source_url ||
+    post.featured_media_src_url ||
+    'https://podcastim.org.il/wp-content/uploads/2023/04/אפליקציית-פודקאסטים-בעברית-אייקון-קטן.jpg'
+  );
+}
+
+/**
+ * Sorts a list of podcasts by date, rating, or Hebrew name
+ */
+export function sortPodcasts(list: Podcast[], sort: PodcastSortOption = 'date'): Podcast[] {
+  const copy = [...list];
+  if (sort === 'rating') {
+    return copy.sort((a, b) => {
+      const diff = (b.rating || 0) - (a.rating || 0);
+      if (diff !== 0) return diff;
+      return (b.ratingCount || 0) - (a.ratingCount || 0);
+    });
+  }
+  if (sort === 'name') {
+    return copy.sort((a, b) => a.title.localeCompare(b.title, 'he'));
+  }
+  // 'date' (latest first)
+  return copy.sort((a, b) => {
+    const timeA = new Date(a.date || 0).getTime();
+    const timeB = new Date(b.date || 0).getTime();
+    if (timeA !== timeB) return timeB - timeA;
+    return b.id - a.id;
+  });
+}
+
 /**
  * Syncs recent podcasts and kids catalog in the background.
  */
@@ -498,17 +601,15 @@ export async function syncCatalogIndexInBackground(): Promise<void> {
   isCatalogSyncing = true;
 
   try {
-    // 1. Fetch all kids podcasts (99 items) with lightweight fields
-    const kidsUrl = `${BASE_URL}/posts?categories=${KIDS_CATEGORY_ID}&per_page=100&_embed=wp:featuredmedia&_fields=id,title,slug,link,categories,excerpt,date,_embedded,content`;
+    // 1. Fetch all kids podcasts (99 items) with _links and _embedded to retrieve featured media images
+    const kidsUrl = `${BASE_URL}/posts?categories=${KIDS_CATEGORY_ID}&per_page=100&_embed=wp:featuredmedia&_fields=id,title,slug,link,categories,excerpt,date,_links,_embedded,content`;
     const resKids = await fetch(kidsUrl);
     if (resKids.ok) {
       const kidsPosts = await resKids.json();
       if (Array.isArray(kidsPosts)) {
         const parsedKids: Podcast[] = kidsPosts.map((post: any) => {
           const title = decodeHtmlEntities(post.title?.rendered || '');
-          const imageUrl =
-            post._embedded?.['wp:featuredmedia']?.[0]?.source_url ||
-            'https://podcastim.org.il/wp-content/uploads/2023/04/אפליקציית-פודקאסטים-בעברית-אייקון-קטן.jpg';
+          const imageUrl = extractFeaturedImage(post);
           const rawContent = post.content?.rendered || '';
           const { rating, ratingCount } = parseRatingsFromContent(rawContent);
 
@@ -543,16 +644,14 @@ export async function syncCatalogIndexInBackground(): Promise<void> {
     }
 
     // 2. Fetch top 100 recent podcasts for general catalog index
-    const allUrl = `${BASE_URL}/posts?per_page=100&_embed=wp:featuredmedia&_fields=id,title,slug,link,categories,excerpt,date,_embedded,content`;
+    const allUrl = `${BASE_URL}/posts?per_page=100&_embed=wp:featuredmedia&_fields=id,title,slug,link,categories,excerpt,date,_links,_embedded,content`;
     const resAll = await fetch(allUrl);
     if (resAll.ok) {
       const allPosts = await resAll.json();
       if (Array.isArray(allPosts)) {
         const parsedAll: Podcast[] = allPosts.map((post: any) => {
           const title = decodeHtmlEntities(post.title?.rendered || '');
-          const imageUrl =
-            post._embedded?.['wp:featuredmedia']?.[0]?.source_url ||
-            'https://podcastim.org.il/wp-content/uploads/2023/04/אפליקציית-פודקאסטים-בעברית-אייקון-קטן.jpg';
+          const imageUrl = extractFeaturedImage(post);
           const rawContent = post.content?.rendered || '';
           const { rating, ratingCount } = parseRatingsFromContent(rawContent);
           const isKidFriendly = Array.isArray(post.categories) && post.categories.includes(KIDS_CATEGORY_ID);
@@ -599,28 +698,35 @@ export async function searchPodcastsFast(params: {
   query: string;
   isKids?: boolean;
   categoryId?: number;
+  sort?: PodcastSortOption;
 }): Promise<Podcast[]> {
-  const { query, isKids, categoryId } = params;
+  const { query, isKids, categoryId, sort } = params;
   const catalog = await getOrLoadCatalogIndex();
 
   const cleanQuery = query.trim().toLowerCase();
+  let results: Podcast[];
+
   if (!cleanQuery && !categoryId) {
-    return isKids ? catalog.filter((p) => p.isKidFriendly) : catalog.slice(0, 30);
+    results = isKids ? catalog.filter((p) => p.isKidFriendly) : catalog.slice(0, 30);
+  } else {
+    results = catalog.filter((podcast) => {
+      if (isKids && !podcast.isKidFriendly && !podcast.categories.includes(KIDS_CATEGORY_ID)) {
+        return false;
+      }
+      if (categoryId && !podcast.categories.includes(categoryId)) {
+        return false;
+      }
+      if (!cleanQuery) return true;
+
+      const titleMatch = podcast.title.toLowerCase().includes(cleanQuery);
+      const excerptMatch = podcast.excerpt?.toLowerCase().includes(cleanQuery);
+      return titleMatch || excerptMatch;
+    });
   }
 
-  const results = catalog.filter((podcast) => {
-    if (isKids && !podcast.isKidFriendly && !podcast.categories.includes(KIDS_CATEGORY_ID)) {
-      return false;
-    }
-    if (categoryId && !podcast.categories.includes(categoryId)) {
-      return false;
-    }
-    if (!cleanQuery) return true;
-
-    const titleMatch = podcast.title.toLowerCase().includes(cleanQuery);
-    const excerptMatch = podcast.excerpt?.toLowerCase().includes(cleanQuery);
-    return titleMatch || excerptMatch;
-  });
-
+  if (sort) {
+    return sortPodcasts(results, sort);
+  }
   return results;
 }
+

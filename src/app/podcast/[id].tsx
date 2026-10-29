@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { fetchPodcastById } from '../../api/podcastim';
-import { Podcast } from '../../api/types';
+import { Podcast, EpisodeSortOption } from '../../api/types';
 import { EpisodeItem } from '../../components/EpisodeItem';
 import { AudioPlayerMini } from '../../components/AudioPlayerMini';
 
@@ -29,6 +29,7 @@ export default function PodcastDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [episodesOrder, setEpisodesOrder] = useState<EpisodeSortOption>('asc');
 
   useEffect(() => {
     async function loadPodcast() {
@@ -234,23 +235,54 @@ export default function PodcastDetailScreen() {
           {/* Episodes List Section */}
           <View style={styles.episodesSection}>
             <View style={styles.episodesHeader}>
-              <Text style={[styles.episodesTitle, { color: theme.colors.text }]}>
-                רשימת פרקים
-              </Text>
-              <Text style={[styles.episodesBadge, { color: theme.colors.textSecondary }]}>
-                ({podcast.episodes.length} פרקים זמינים)
-              </Text>
+              <View style={styles.episodesTitleGroup}>
+                <Text style={[styles.episodesTitle, { color: theme.colors.text }]}>
+                  רשימת פרקים
+                </Text>
+                <Text style={[styles.episodesBadge, { color: theme.colors.textSecondary }]}>
+                  ({podcast.episodes.length} פרקים זמינים)
+                </Text>
+              </View>
+
+              {podcast.episodes.length > 1 && (
+                <TouchableOpacity
+                  onPress={() => setEpisodesOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                  style={[
+                    styles.sortToggleBtn,
+                    {
+                      backgroundColor: theme.colors.card,
+                      borderColor: theme.colors.border,
+                      borderRadius: isKids ? 16 : 10,
+                    },
+                  ]}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name={episodesOrder === 'asc' ? 'arrow-down-outline' : 'arrow-up-outline'}
+                    size={14}
+                    color={theme.colors.primary}
+                  />
+                  <Text style={[styles.sortToggleText, { color: theme.colors.primary }]}>
+                    {episodesOrder === 'asc' ? 'מהראשון לאחרון' : 'מהאחרון לראשון'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {podcast.episodes.length > 0 ? (
-              podcast.episodes.map((ep, idx) => (
-                <EpisodeItem
-                  key={ep.id}
-                  episode={ep}
-                  playlist={podcast.episodes}
-                  index={idx}
-                />
-              ))
+              (() => {
+                const displayedEpisodes =
+                  episodesOrder === 'asc' ? podcast.episodes : [...podcast.episodes].reverse();
+                return displayedEpisodes.map((ep, idx) => (
+                  <EpisodeItem
+                    key={ep.id}
+                    episode={ep}
+                    playlist={displayedEpisodes}
+                    index={idx}
+                  />
+                ));
+              })()
             ) : (
               <View style={styles.noEpisodesBox}>
                 <Ionicons name="information-circle-outline" size={36} color={theme.colors.textMuted} />
@@ -423,6 +455,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  episodesTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   episodesTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -430,6 +467,18 @@ const styles = StyleSheet.create({
   },
   episodesBadge: {
     fontSize: 13,
+  },
+  sortToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+  },
+  sortToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   noEpisodesBox: {
     paddingVertical: 32,
