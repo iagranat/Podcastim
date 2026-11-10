@@ -99,7 +99,7 @@ export default function FavoritesScreen() {
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={[
               styles.listContent,
-              { paddingBottom: currentEpisode ? 90 : 24 },
+              { paddingBottom: currentEpisode ? 160 : 32 },
             ]}
             renderItem={({ item }) => <PodcastCard podcast={item} horizontal />}
           />
@@ -122,7 +122,7 @@ export default function FavoritesScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={[
             styles.listContent,
-            { paddingBottom: currentEpisode ? 90 : 24 },
+            { paddingBottom: currentEpisode ? 160 : 32 },
           ]}
           renderItem={({ item, index }) => (
             <EpisodeItem episode={item} playlist={history} index={index} />

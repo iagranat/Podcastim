@@ -266,7 +266,7 @@ export default function SearchScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.suggestionsContainer,
-            { paddingBottom: currentEpisode ? 90 : 24 },
+            { paddingBottom: currentEpisode ? 160 : 32 },
           ]}
         >
           <Text style={[styles.suggestionsTitle, { color: theme.colors.text }]}>
@@ -317,7 +317,7 @@ export default function SearchScreen() {
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={[
             styles.listContent,
-            { paddingBottom: currentEpisode ? 90 : 24 },
+            { paddingBottom: currentEpisode ? 160 : 32 },
           ]}
           renderItem={({ item }) => <PodcastCard podcast={item} horizontal />}
           onEndReached={loadMore}

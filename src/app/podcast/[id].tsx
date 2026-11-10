@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Share,
+  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,7 +26,11 @@ export default function PodcastDetailScreen() {
   const { playEpisode, currentEpisode } = useAudioPlayer();
   const insets = useSafeAreaInsets();
   const isKids = mode === 'kids';
-  const bottomInset = Math.max(insets.bottom, 10);
+  // Compute safe bottom padding. On Android with 3-button nav, insets.bottom can report 0 despite system buttons (~48dp).
+  // Enforce a minimum safe bottom inset of 48dp on Android when insets.bottom < 20dp.
+  const safeBottom = Platform.OS === 'android'
+    ? (insets.bottom >= 20 ? insets.bottom : 48)
+    : Math.max(insets.bottom, 12);
 
   const [podcast, setPodcast] = useState<Podcast | null>(null);
   const [loading, setLoading] = useState(true);
@@ -142,7 +147,7 @@ export default function PodcastDetailScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: 80 + bottomInset + (currentEpisode ? 75 : 0) },
+            { paddingBottom: 80 + safeBottom + (currentEpisode ? 85 : 0) },
           ]}
         >
           {/* Header Section: Image + Title */}
@@ -304,7 +309,7 @@ export default function PodcastDetailScreen() {
 
       {/* Mini Player */}
       {currentEpisode ? (
-        <View style={[styles.miniPlayerContainer, { bottom: bottomInset }]}>
+        <View style={[styles.miniPlayerContainer, { bottom: safeBottom + 6 }]}>
           <AudioPlayerMini />
         </View>
       ) : null}

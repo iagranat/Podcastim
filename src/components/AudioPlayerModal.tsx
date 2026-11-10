@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Slider from '@react-native-community/slider';
@@ -42,6 +43,9 @@ export const AudioPlayerModal: React.FC = () => {
 
   const { theme, mode, isFavorite, toggleFavorite } = useApp();
   const insets = useSafeAreaInsets();
+  const safeBottom = Platform.OS === 'android'
+    ? (insets.bottom >= 20 ? insets.bottom : 48)
+    : Math.max(insets.bottom, 24);
   const [isSleepModalOpen, setIsSleepModalOpen] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekingPosition, setSeekingPosition] = useState(0);
@@ -72,7 +76,7 @@ export const AudioPlayerModal: React.FC = () => {
           {
             backgroundColor: theme.colors.background,
             paddingTop: Math.max(insets.top, 24),
-            paddingBottom: Math.max(insets.bottom, 24),
+            paddingBottom: safeBottom,
           },
         ]}
       >

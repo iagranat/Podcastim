@@ -98,11 +98,13 @@ jobs:
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: latest
-          name: "Latest Android APK Build"
+          tag_name: v1.0.${{ github.run_number }}
+          name: "Build #${{ github.run_number }}"
           body: |
             ### 📱 Direct APK Download (Ready to install without unzipping)
-            - **Debug Build** (sideload on any Android device): [podcastim-debug.apk](https://github.com/${{ github.repository }}/releases/download/latest/podcastim-debug.apk)
-            - **Release Build** (optimized production binary): [podcastim-release.apk](https://github.com/${{ github.repository }}/releases/download/latest/podcastim-release.apk)
+            - **Release Build** (optimized production binary): [podcastim-release.apk](https://github.com/${{ github.repository }}/releases/download/v1.0.${{ github.run_number }}/podcastim-release.apk)
+            - **Debug Build** (sideload on any Android device): [podcastim-debug.apk](https://github.com/${{ github.repository }}/releases/download/v1.0.${{ github.run_number }}/podcastim-debug.apk)
+
+            *Automated build from commit ${{ github.sha }}*
           files: output_apks/*.apk
           make_latest: true

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from '../context/AppContext';
 import { AudioPlayerProvider } from '../context/AudioPlayerContext';
 import { AudioPlayerModal } from '../components/AudioPlayerModal';
@@ -35,7 +35,7 @@ function RootNavigation() {
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <AppProvider>
         <AudioPlayerProvider>
           <RootNavigation />

@@ -58,7 +58,7 @@ export default function SettingsScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: currentEpisode ? 90 : 24 },
+          { paddingBottom: currentEpisode ? 160 : 32 },
         ]}
       >
         {/* Header */}
