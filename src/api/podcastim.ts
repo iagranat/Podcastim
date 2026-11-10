@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Episode, Podcast, Category, PodcastSortOption } from './types';
+import { Episode, Podcast, Category, PodcastSortOption, PaginatedSearchResponse } from './types';
 
 const BASE_URL = 'https://podcastim.org.il/wp-json/wp/v2';
 export const KIDS_CATEGORY_ID = 8; // Official 'ילדים' category on podcastim.org.il
@@ -729,4 +729,130 @@ export async function searchPodcastsFast(params: {
   }
   return results;
 }
+
+/**
+ * Calculates a search relevance score for a podcast given a query.
+ * Exact title match = 1000, title prefix = 800, title phrase match = 600, etc.
+ */
+export function scoreRelevance(podcast: Podcast, query: string): number {
+  const cleanQ = query.trim().toLowerCase();
+  if (!cleanQ) return 0;
+  const title = (podcast.title || '').trim().toLowerCase();
+  const excerpt = (podcast.excerpt || '').trim().toLowerCase();
+
+  // 1. Exact title match -> top score
+  if (title === cleanQ) return 1000;
+
+  // 2. Title starts with exact query
+  if (title.startsWith(cleanQ)) return 800;
+
+  // 3. Title contains exact query phrase
+  if (title.includes(cleanQ)) return 600;
+
+  // 4. All words in query appear in title
+  const words = cleanQ.split(/\s+/).filter((w) => w.length > 0);
+  const allInTitle = words.length > 0 && words.every((w) => title.includes(w));
+  if (allInTitle) return 400 + words.length * 10;
+
+  // 5. Some words appear in title
+  const matchingWords = words.filter((w) => title.includes(w));
+  if (matchingWords.length > 0) return 200 + matchingWords.length * 10;
+
+  // 6. Excerpt contains exact query phrase
+  if (excerpt.includes(cleanQ)) return 100;
+
+  // 7. Some words appear in excerpt
+  const inExcerpt = words.filter((w) => excerpt.includes(w));
+  if (inExcerpt.length > 0) return 50 + inExcerpt.length * 5;
+
+  return 10;
+}
+
+/**
+ * Searches podcasts via the WordPress REST API with pagination (10 hits per page),
+ * lightweight fields (no heavy content payload), and relevance ranking.
+ */
+export async function searchPodcastsPaginated(params: {
+  query: string;
+  page?: number;
+  perPage?: number;
+  categoryId?: number;
+}): Promise<PaginatedSearchResponse> {
+  const { query, page = 1, perPage = 10, categoryId } = params;
+  const trimmed = query.trim();
+
+  let url = `${BASE_URL}/posts?_embed=wp:featuredmedia&per_page=${perPage}&page=${page}&_fields=id,title,slug,link,categories,excerpt,date,yoast_head_json,_links,_embedded`;
+  if (categoryId) {
+    url += `&categories=${categoryId}`;
+  }
+  if (trimmed) {
+    url += `&search=${encodeURIComponent(trimmed)}`;
+  }
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    // If page is beyond available results (WordPress returns 400 for out-of-range page)
+    if (res.status === 400) {
+      return { podcasts: [], totalResults: 0, totalPages: 0, page };
+    }
+    throw new Error(`Search request failed with HTTP ${res.status}`);
+  }
+
+  const totalResultsHeader = res.headers.get('x-wp-total');
+  const totalPagesHeader = res.headers.get('x-wp-totalpages');
+  const totalResults = totalResultsHeader ? parseInt(totalResultsHeader, 10) : 0;
+  const totalPages = totalPagesHeader ? parseInt(totalPagesHeader, 10) : 1;
+
+  const data = await res.json();
+  if (!Array.isArray(data)) {
+    return { podcasts: [], totalResults: 0, totalPages: 0, page };
+  }
+
+  // Preload cached catalog to get ratings and episode counts if already known
+  const catalog = await getOrLoadCatalogIndex();
+  const catalogMap = new Map<number, Podcast>();
+  for (const item of catalog) {
+    catalogMap.set(item.id, item);
+  }
+
+  const podcasts: Podcast[] = data.map((post: any) => {
+    const title = decodeHtmlEntities(post.title?.rendered || '');
+    const imageUrl = extractFeaturedImage(post);
+    const cached = catalogMap.get(post.id);
+    const excerpt = decodeHtmlEntities(
+      post.excerpt?.rendered || post.yoast_head_json?.description || ''
+    );
+    const isKidFriendly =
+      Array.isArray(post.categories) && post.categories.includes(KIDS_CATEGORY_ID);
+
+    return {
+      id: post.id,
+      title,
+      slug: post.slug,
+      link: post.link,
+      imageUrl,
+      categories: post.categories || [],
+      excerpt,
+      episodeCount: cached ? cached.episodeCount : 0,
+      episodes: cached ? cached.episodes : [],
+      isKidFriendly,
+      date: post.date,
+      rating: cached?.rating,
+      ratingCount: cached?.ratingCount,
+    };
+  });
+
+  // Apply relevance scoring to rank exact matches (e.g. "הקול מקצועי") to the very top!
+  if (trimmed) {
+    podcasts.sort((a, b) => scoreRelevance(b, trimmed) - scoreRelevance(a, trimmed));
+  }
+
+  return {
+    podcasts,
+    totalResults,
+    totalPages,
+    page,
+  };
+}
+
 

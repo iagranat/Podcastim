@@ -50,3 +50,11 @@ export interface SleepTimerOption {
 export type PodcastSortOption = 'date' | 'rating' | 'name';
 export type EpisodeSortOption = 'asc' | 'desc';
 
+export interface PaginatedSearchResponse {
+  podcasts: Podcast[];
+  totalResults: number;
+  totalPages: number;
+  page: number;
+}
+
+
