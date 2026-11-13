@@ -8,6 +8,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Platform,
+  Share,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Slider from '@react-native-community/slider';
@@ -61,6 +62,19 @@ export const AudioPlayerModal: React.FC = () => {
     const speeds = [0.8, 1.0, 1.2, 1.5];
     const nextIdx = (speeds.indexOf(playbackRate) + 1) % speeds.length;
     setPlaybackRate(speeds[nextIdx]);
+  };
+
+  const handleShareCurrentEpisode = async () => {
+    if (!currentEpisode) return;
+    try {
+      const shareUrl = `https://podcastim.org.il/?p=${currentEpisode.podcastId}&ep=${encodeURIComponent(currentEpisode.id)}`;
+      await Share.share({
+        title: currentEpisode.title,
+        message: `האזינו לפרק "${currentEpisode.title}" מתוך הפודקאסט "${currentEpisode.podcastTitle}": ${shareUrl}`,
+      });
+    } catch (e) {
+      console.warn('Share episode error', e);
+    }
   };
 
   return (
@@ -303,6 +317,16 @@ export const AudioPlayerModal: React.FC = () => {
               {playbackRate}x
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleShareCurrentEpisode}
+            style={[styles.speedPill, { backgroundColor: theme.colors.card }]}
+          >
+            <Ionicons name="share-social-outline" size={16} color={theme.colors.textSecondary} />
+            <Text style={[styles.speedText, { color: theme.colors.text }]}>
+              שיתוף פרק
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Sleep Timer Picker Modal */}
@@ -463,6 +487,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
   },
   speedPill: {
     flexDirection: 'row',

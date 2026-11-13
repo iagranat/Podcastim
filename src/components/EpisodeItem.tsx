@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Episode } from '../api/types';
 import { useAudioPlayer } from '../context/AudioPlayerContext';
@@ -19,6 +19,18 @@ export const EpisodeItem: React.FC<EpisodeItemProps> = ({ episode, playlist, ind
   const isCurrent = currentEpisode?.id === episode.id;
   const isListened = isEpisodeListened(episode.id);
   const isKids = mode === 'kids';
+
+  const handleShareEpisode = async () => {
+    try {
+      const shareUrl = `https://podcastim.org.il/?p=${episode.podcastId}&ep=${encodeURIComponent(episode.id)}`;
+      await Share.share({
+        title: episode.title,
+        message: `האזינו לפרק "${episode.title}" מתוך הפודקאסט "${episode.podcastTitle}": ${shareUrl}`,
+      });
+    } catch (e) {
+      console.warn('Share episode error', e);
+    }
+  };
 
   const handlePress = () => {
     if (isCurrent) {
@@ -149,6 +161,19 @@ export const EpisodeItem: React.FC<EpisodeItemProps> = ({ episode, playlist, ind
             name={isListened ? 'checkmark-circle' : 'checkmark-circle-outline'}
             size={22}
             color={isListened ? '#10B981' : theme.colors.textMuted}
+          />
+        </TouchableOpacity>
+
+        {/* Share Episode Button */}
+        <TouchableOpacity
+          onPress={handleShareEpisode}
+          style={styles.actionBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons
+            name="share-social-outline"
+            size={20}
+            color={theme.colors.textMuted}
           />
         </TouchableOpacity>
 

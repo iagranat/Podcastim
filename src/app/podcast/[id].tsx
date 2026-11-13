@@ -21,7 +21,7 @@ import { EpisodeItem } from '../../components/EpisodeItem';
 import { AudioPlayerMini } from '../../components/AudioPlayerMini';
 
 export default function PodcastDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, ep, episode } = useLocalSearchParams<{ id: string; ep?: string; episode?: string }>();
   const { theme, mode, isFavorite, toggleFavorite } = useApp();
   const { playEpisode, currentEpisode } = useAudioPlayer();
   const insets = useSafeAreaInsets();
@@ -44,8 +44,23 @@ export default function PodcastDetailScreen() {
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchPodcastById(Number(id));
+        const data = await fetchPodcastById(id);
         setPodcast(data);
+
+        // Auto-play targeted episode if deep link specifies ?ep= or ?episode=
+        const targetEp = ep || episode;
+        if (targetEp && data.episodes && data.episodes.length > 0) {
+          const targetStr = decodeURIComponent(targetEp).trim().toLowerCase();
+          const targetEpisode = data.episodes.find(
+            (e, idx) =>
+              e.id.toLowerCase() === targetStr ||
+              String(idx + 1) === targetStr ||
+              e.title.toLowerCase().includes(targetStr)
+          );
+          if (targetEpisode) {
+            playEpisode(targetEpisode, data.episodes);
+          }
+        }
       } catch (e: any) {
         console.warn('Failed to load podcast:', e);
         setError('לא ניתן לטעון את הפודקאסט. נסו שוב מאוחר יותר.');
@@ -54,16 +69,17 @@ export default function PodcastDetailScreen() {
       }
     }
     loadPodcast();
-  }, [id]);
+  }, [id, ep, episode]);
 
   const isFav = podcast ? isFavorite(podcast.id) : false;
 
   const handleShare = async () => {
     if (!podcast) return;
     try {
+      const shareUrl = podcast.link || `https://podcastim.org.il/?p=${podcast.id}`;
       await Share.share({
         title: podcast.title,
-        message: `האזינו לפודקאסט "${podcast.title}" באתר הפודקאסטים הישראלי: ${podcast.link}`,
+        message: `האזינו לפודקאסט "${podcast.title}" באתר הפודקאסטים הישראלי: ${shareUrl}`,
       });
     } catch (e) {
       console.warn('Share error', e);

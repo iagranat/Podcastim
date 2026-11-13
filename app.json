@@ -8,10 +8,46 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "associatedDomains": [
+        "applinks:podcastim.org.il",
+        "applinks:www.podcastim.org.il"
+      ]
     },
     "android": {
       "package": "il.org.podcastim.kids",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "podcastim.org.il",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.podcastim.org.il",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "http",
+              "host": "podcastim.org.il",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "http",
+              "host": "www.podcastim.org.il",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -32,7 +68,8 @@
         }
       ],
       "expo-asset",
-      "expo-image"
+      "expo-image",
+      "expo-status-bar"
     ]
   }
 }

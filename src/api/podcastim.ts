@@ -336,64 +336,17 @@ export async function fetchPodcasts(params?: {
 }
 
 /**
- * Fetch a single podcast by ID with caching
+ * Helper to transform WordPress raw post object to Podcast model
  */
-export async function fetchPodcastById(id: number): Promise<Podcast> {
-  const cacheKey = `${CACHE_KEYS.PODCAST_PREFIX}${id}`;
-
-  try {
-    const cached = await AsyncStorage.getItem(cacheKey);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      // Background refresh
-      fetch(`${BASE_URL}/posts/${id}?_embed=1`)
-        .then((r) => r.json())
-        .then((post) => {
-          if (post && post.id) {
-            const title = decodeHtmlEntities(post.title?.rendered || '');
-            const imageUrl = extractFeaturedImage(post);
-            const rawContent = post.content?.rendered || '';
-            const episodes = parseEpisodesFromContent(rawContent, post.id, title, imageUrl);
-            const { rating, ratingCount } = parseRatingsFromContent(rawContent);
-            const fresh: Podcast = {
-              id: post.id,
-              title,
-              slug: post.slug,
-              link: post.link,
-              imageUrl,
-              categories: post.categories || [],
-              excerpt: decodeHtmlEntities(post.excerpt?.rendered || ''),
-              episodeCount: episodes.length,
-              episodes,
-              isKidFriendly: Array.isArray(post.categories) && post.categories.includes(KIDS_CATEGORY_ID),
-              date: post.date,
-              rating,
-              ratingCount,
-            };
-            AsyncStorage.setItem(cacheKey, JSON.stringify(fresh)).catch(() => {});
-          }
-        })
-        .catch(() => {});
-
-      return parsed;
-    }
-  } catch (e) {
-    console.warn('Error reading single podcast cache', e);
-  }
-
-  const res = await fetch(`${BASE_URL}/posts/${id}?_embed=1`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const post = await res.json();
-
+function formatPostToPodcast(post: any): Podcast {
   const title = decodeHtmlEntities(post.title?.rendered || '');
   const imageUrl = extractFeaturedImage(post);
-
   const rawContent = post.content?.rendered || '';
   const episodes = parseEpisodesFromContent(rawContent, post.id, title, imageUrl);
   const isKidFriendly = Array.isArray(post.categories) && post.categories.includes(KIDS_CATEGORY_ID);
   const { rating, ratingCount } = parseRatingsFromContent(rawContent);
 
-  const podcast: Podcast = {
+  return {
     id: post.id,
     title,
     slug: post.slug,
@@ -408,8 +361,79 @@ export async function fetchPodcastById(id: number): Promise<Podcast> {
     rating,
     ratingCount,
   };
+}
 
-  AsyncStorage.setItem(cacheKey, JSON.stringify(podcast)).catch(() => {});
+/**
+ * Fetch a single podcast by ID or by slug with caching
+ */
+export async function fetchPodcastById(idOrSlug: number | string): Promise<Podcast> {
+  const isNumeric =
+    typeof idOrSlug === 'number' ||
+    (/^\d+$/.test(String(idOrSlug).trim()) && !isNaN(Number(idOrSlug)));
+
+  if (isNumeric) {
+    const id = Number(idOrSlug);
+    const cacheKey = `${CACHE_KEYS.PODCAST_PREFIX}${id}`;
+
+    try {
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Background refresh
+        fetch(`${BASE_URL}/posts/${id}?_embed=1`)
+          .then((r) => r.json())
+          .then((post) => {
+            if (post && post.id) {
+              const fresh = formatPostToPodcast(post);
+              AsyncStorage.setItem(cacheKey, JSON.stringify(fresh)).catch(() => {});
+            }
+          })
+          .catch(() => {});
+
+        return parsed;
+      }
+    } catch (e) {
+      console.warn('Error reading single podcast cache', e);
+    }
+
+    const res = await fetch(`${BASE_URL}/posts/${id}?_embed=1`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const post = await res.json();
+    const podcast = formatPostToPodcast(post);
+
+    AsyncStorage.setItem(cacheKey, JSON.stringify(podcast)).catch(() => {});
+    return podcast;
+  }
+
+  // Handle by slug (e.g. "סוכן-סודי" or "%d7%a1%d7%95%d7%9b%d7%9f-%d7%a1%d7%95%d7%93%d7%99")
+  const decodedSlug = decodeURIComponent(String(idOrSlug)).trim().replace(/^\/+|\/+$/g, '');
+  const encodedSlug = encodeURIComponent(decodedSlug);
+  const slugCacheKey = `${CACHE_KEYS.PODCAST_PREFIX}slug_${encodedSlug}`;
+
+  try {
+    const cached = await AsyncStorage.getItem(slugCacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      return parsed;
+    }
+  } catch (e) {
+    console.warn('Error reading slug podcast cache', e);
+  }
+
+  const res = await fetch(`${BASE_URL}/posts?slug=${encodedSlug}&_embed=1`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const posts = await res.json();
+  if (!Array.isArray(posts) || posts.length === 0) {
+    throw new Error(`פודקאסט לא נמצא עבור הקישור: ${idOrSlug}`);
+  }
+
+  const post = posts[0];
+  const podcast = formatPostToPodcast(post);
+
+  // Cache both under slug and under post ID
+  AsyncStorage.setItem(slugCacheKey, JSON.stringify(podcast)).catch(() => {});
+  AsyncStorage.setItem(`${CACHE_KEYS.PODCAST_PREFIX}${podcast.id}`, JSON.stringify(podcast)).catch(() => {});
+
   return podcast;
 }
 
