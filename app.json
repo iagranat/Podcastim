@@ -23,23 +23,19 @@
           "data": [
             {
               "scheme": "https",
-              "host": "podcastim.org.il",
-              "pathPrefix": "/"
+              "host": "podcastim.org.il"
             },
             {
               "scheme": "https",
-              "host": "www.podcastim.org.il",
-              "pathPrefix": "/"
+              "host": "www.podcastim.org.il"
             },
             {
               "scheme": "http",
-              "host": "podcastim.org.il",
-              "pathPrefix": "/"
+              "host": "podcastim.org.il"
             },
             {
               "scheme": "http",
-              "host": "www.podcastim.org.il",
-              "pathPrefix": "/"
+              "host": "www.podcastim.org.il"
             }
           ],
           "category": [
